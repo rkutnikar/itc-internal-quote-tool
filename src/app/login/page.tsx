@@ -27,10 +27,21 @@ export default function LoginPage() {
         const data = (await res.json()) as {
           loggedIn: boolean;
           setupRequired: boolean;
+          storageWritable?: boolean;
         };
         if (cancelled) return;
         if (data.loggedIn) {
           router.replace("/dashboard");
+          return;
+        }
+        if (data.setupRequired && data.storageWritable === false) {
+          // Read-only host (e.g. Vercel): setup can't persist a password.
+          setMode("login");
+          setError(
+            "This server cannot store a password (read-only filesystem). " +
+              "Set the APP_PASSWORD and SESSION_SECRET environment variables " +
+              "in your hosting dashboard, redeploy, then sign in here."
+          );
           return;
         }
         setMode(data.setupRequired ? "setup" : "login");

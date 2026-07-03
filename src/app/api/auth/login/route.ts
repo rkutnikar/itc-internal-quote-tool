@@ -46,7 +46,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Passwords do not match." }, { status: 400 });
     }
     settings.auth.passwordHash = hashPassword(password);
-    saveSettings(settings);
+    try {
+      saveSettings(settings);
+    } catch (err) {
+      return NextResponse.json(
+        { error: err instanceof Error ? err.message : "Could not save password." },
+        { status: 500 }
+      );
+    }
   } else {
     const ok = envPassword
       ? password === envPassword

@@ -92,6 +92,13 @@ export async function PUT(req: NextRequest) {
     settings.auth.passwordHash = hashPassword(update.newPassword);
   }
 
-  saveSettings(settings);
+  try {
+    saveSettings(settings);
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Could not save settings." },
+      { status: 500 }
+    );
+  }
   return NextResponse.json(publicSettings(settings));
 }

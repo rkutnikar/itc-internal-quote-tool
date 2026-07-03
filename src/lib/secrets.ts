@@ -5,6 +5,22 @@ import path from "node:path";
 export const DATA_DIR =
   process.env.DATA_DIR ?? path.join(process.cwd(), "data");
 
+/** True when the data dir accepts writes (false on Vercel's read-only fs). */
+let writableCache: boolean | null = null;
+export function dataDirWritable(): boolean {
+  if (writableCache !== null) return writableCache;
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    const probe = path.join(DATA_DIR, ".probe");
+    fs.writeFileSync(probe, "ok");
+    fs.unlinkSync(probe);
+    writableCache = true;
+  } catch {
+    writableCache = false;
+  }
+  return writableCache;
+}
+
 /** Wraps fs writes so a read-only filesystem (Vercel) fails with advice. */
 export function writeDataFile(fileName: string, content: string): void {
   try {
