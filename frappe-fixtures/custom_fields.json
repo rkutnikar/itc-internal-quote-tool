@@ -1,0 +1,44 @@
+[
+  {
+    "doctype": "Custom Field",
+    "name": "Customer-custom_priority",
+    "dt": "Customer",
+    "fieldname": "custom_priority",
+    "label": "Priority",
+    "fieldtype": "Select",
+    "options": "P1 - Strategic\nP2 - Preferred\nP3 - Standard",
+    "default": "P3 - Standard",
+    "insert_after": "customer_group",
+    "in_list_view": 1,
+    "in_standard_filter": 1
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "Employee-custom_ctc_annual",
+    "dt": "Employee",
+    "fieldname": "custom_ctc_annual",
+    "label": "CTC (Annual)",
+    "fieldtype": "Currency",
+    "insert_after": "employment_type",
+    "permlevel": 0
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "Supplier-custom_is_consultant",
+    "dt": "Supplier",
+    "fieldname": "custom_is_consultant",
+    "label": "Is Consultant",
+    "fieldtype": "Check",
+    "insert_after": "supplier_group"
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "Supplier-custom_monthly_rate",
+    "dt": "Supplier",
+    "fieldname": "custom_monthly_rate",
+    "label": "Monthly Rate",
+    "fieldtype": "Currency",
+    "insert_after": "custom_is_consultant",
+    "depends_on": "custom_is_consultant"
+  }
+]
