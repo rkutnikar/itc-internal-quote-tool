@@ -23,8 +23,8 @@ export interface FrappeConnection {
   apiSecret: string;
 }
 
-export function getConnection(settings?: Settings): FrappeConnection {
-  const s = settings ?? loadSettings();
+export async function getConnection(settings?: Settings): Promise<FrappeConnection> {
+  const s = settings ?? (await loadSettings());
   return {
     url: s.frappe.url.replace(/\/+$/, ""),
     apiKey: s.frappe.apiKey,
@@ -62,11 +62,12 @@ function stripHtml(s: string): string {
 }
 
 async function frappeFetch<T>(
-  conn: FrappeConnection,
+  connMaybe: FrappeConnection | undefined,
   path: string,
   init: RequestInit = {},
   timeoutMs = 15000
 ): Promise<T> {
+  const conn = connMaybe ?? (await getConnection());
   if (!conn.url) {
     throw new FrappeError("Frappe URL is not configured. Set it in Settings.", 0);
   }
@@ -121,7 +122,7 @@ export interface ListOptions {
 export async function getList<T = Record<string, unknown>>(
   doctype: string,
   opts: ListOptions = {},
-  conn: FrappeConnection = getConnection()
+  conn?: FrappeConnection
 ): Promise<T[]> {
   const params = new URLSearchParams();
   params.set("fields", JSON.stringify(opts.fields ?? ["name"]));
@@ -145,7 +146,7 @@ export async function getList<T = Record<string, unknown>>(
 export async function getDoc<T = Record<string, unknown>>(
   doctype: string,
   name: string,
-  conn: FrappeConnection = getConnection()
+  conn?: FrappeConnection
 ): Promise<T> {
   const res = await frappeFetch<{ data: T }>(
     conn,
@@ -157,7 +158,7 @@ export async function getDoc<T = Record<string, unknown>>(
 export async function insertDoc<T = Record<string, unknown>>(
   doctype: string,
   doc: Record<string, unknown>,
-  conn: FrappeConnection = getConnection()
+  conn?: FrappeConnection
 ): Promise<T> {
   const res = await frappeFetch<{ data: T }>(
     conn,
@@ -171,7 +172,7 @@ export async function updateDoc<T = Record<string, unknown>>(
   doctype: string,
   name: string,
   doc: Record<string, unknown>,
-  conn: FrappeConnection = getConnection()
+  conn?: FrappeConnection
 ): Promise<T> {
   const res = await frappeFetch<{ data: T }>(
     conn,
@@ -183,7 +184,7 @@ export async function updateDoc<T = Record<string, unknown>>(
 
 export async function callMethod<T = unknown>(
   method: string,
-  conn: FrappeConnection = getConnection()
+  conn?: FrappeConnection
 ): Promise<T> {
   return frappeFetch<T>(conn, `/api/method/${method}`);
 }
@@ -201,8 +202,9 @@ export async function uploadFile(
     docname: string;
     isPrivate?: boolean;
   },
-  conn: FrappeConnection = getConnection()
+  connMaybe?: FrappeConnection
 ): Promise<{ name: string; file_url: string }> {
+  const conn = connMaybe ?? (await getConnection());
   const form = new FormData();
   form.set(
     "file",

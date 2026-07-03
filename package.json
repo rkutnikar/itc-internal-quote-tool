@@ -11,6 +11,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@vercel/blob": "^2.5.0",
     "iron-session": "^8.0.4",
     "next": "16.2.10",
     "pdf-lib": "^1.17.1",

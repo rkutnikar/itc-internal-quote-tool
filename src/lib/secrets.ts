@@ -5,40 +5,6 @@ import path from "node:path";
 export const DATA_DIR =
   process.env.DATA_DIR ?? path.join(process.cwd(), "data");
 
-/** True when the data dir accepts writes (false on Vercel's read-only fs). */
-let writableCache: boolean | null = null;
-export function dataDirWritable(): boolean {
-  if (writableCache !== null) return writableCache;
-  try {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-    const probe = path.join(DATA_DIR, ".probe");
-    fs.writeFileSync(probe, "ok");
-    fs.unlinkSync(probe);
-    writableCache = true;
-  } catch {
-    writableCache = false;
-  }
-  return writableCache;
-}
-
-/** Wraps fs writes so a read-only filesystem (Vercel) fails with advice. */
-export function writeDataFile(fileName: string, content: string): void {
-  try {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-    fs.writeFileSync(path.join(DATA_DIR, fileName), content, { mode: 0o600 });
-  } catch (err) {
-    const code = (err as NodeJS.ErrnoException).code;
-    if (code === "EROFS" || code === "EACCES" || code === "EPERM") {
-      throw new Error(
-        "The server filesystem is read-only, so settings and local quotes cannot be saved here. " +
-          "On Vercel, configure via environment variables (SESSION_SECRET, APP_PASSWORD, FRAPPE_*) " +
-          "and connect Frappe so quotes are stored there — see README."
-      );
-    }
-    throw err;
-  }
-}
-
 /**
  * Session/encryption secret resolution:
  * 1. SESSION_SECRET env var (required in production — Vercel fs is ephemeral)
@@ -58,7 +24,8 @@ export function getSessionSecret(): string {
       return fs.readFileSync(secretFile, "utf8").trim();
     }
     const secret = crypto.randomBytes(32).toString("hex");
-    writeDataFile("secret", secret);
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(secretFile, secret, { mode: 0o600 });
     return secret;
   } catch {
     if (!memorySecret) {

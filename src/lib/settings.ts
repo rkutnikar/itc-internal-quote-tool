@@ -1,15 +1,15 @@
-import fs from "node:fs";
-import path from "node:path";
 import { z } from "zod";
-import { DATA_DIR, decrypt, encrypt, writeDataFile } from "./secrets";
+import { decrypt, encrypt } from "./secrets";
+import { readDataFile, writeDataFile } from "./storage";
 import { pricingConfigSchema } from "./pricing";
 
 /**
- * App settings live in an encrypted file at data/settings.enc so the whole
- * tool is configurable from the Settings screen without redeploys.
+ * App settings live in an encrypted blob (`settings.enc`) — on the local
+ * filesystem in dev, in Vercel Blob when deployed with a Blob store — so the
+ * whole tool is configurable from the Settings screen without redeploys.
  *
- * Env vars override file values (recommended on Vercel, where the filesystem
- * is ephemeral): FRAPPE_URL, FRAPPE_API_KEY, FRAPPE_API_SECRET, APP_PASSWORD.
+ * Env vars override stored values: FRAPPE_URL, FRAPPE_API_KEY,
+ * FRAPPE_API_SECRET, APP_PASSWORD.
  */
 
 /** Frappe fieldnames are snake_case identifiers — reject anything else. */
@@ -64,8 +64,6 @@ export const settingsSchema = z.object({
 
 export type Settings = z.infer<typeof settingsSchema>;
 
-const SETTINGS_FILE = path.join(DATA_DIR, "settings.enc");
-
 export function defaultSettings(): Settings {
   return settingsSchema.parse({
     frappe: {},
@@ -75,26 +73,26 @@ export function defaultSettings(): Settings {
   });
 }
 
-export function loadSettings(): Settings {
-  let fromFile: Settings = defaultSettings();
-  if (fs.existsSync(SETTINGS_FILE)) {
+export async function loadSettings(): Promise<Settings> {
+  let stored: Settings = defaultSettings();
+  const raw = await readDataFile("settings.enc");
+  if (raw !== null) {
     try {
-      const raw = decrypt(fs.readFileSync(SETTINGS_FILE, "utf8"));
-      fromFile = settingsSchema.parse(JSON.parse(raw));
+      stored = settingsSchema.parse(JSON.parse(decrypt(raw)));
     } catch {
       // Corrupt or key changed — fall back to defaults rather than crash.
-      fromFile = defaultSettings();
+      stored = defaultSettings();
     }
   }
   // Env overrides
-  if (process.env.FRAPPE_URL) fromFile.frappe.url = process.env.FRAPPE_URL;
-  if (process.env.FRAPPE_API_KEY) fromFile.frappe.apiKey = process.env.FRAPPE_API_KEY;
-  if (process.env.FRAPPE_API_SECRET) fromFile.frappe.apiSecret = process.env.FRAPPE_API_SECRET;
-  return fromFile;
+  if (process.env.FRAPPE_URL) stored.frappe.url = process.env.FRAPPE_URL;
+  if (process.env.FRAPPE_API_KEY) stored.frappe.apiKey = process.env.FRAPPE_API_KEY;
+  if (process.env.FRAPPE_API_SECRET) stored.frappe.apiSecret = process.env.FRAPPE_API_SECRET;
+  return stored;
 }
 
-export function saveSettings(settings: Settings): void {
-  writeDataFile("settings.enc", encrypt(JSON.stringify(settings)));
+export async function saveSettings(settings: Settings): Promise<void> {
+  await writeDataFile("settings.enc", encrypt(JSON.stringify(settings)));
 }
 
 /** Settings safe to send to the browser — secrets replaced with flags. */

@@ -1,7 +1,6 @@
-import fs from "node:fs";
-import path from "node:path";
 import { z } from "zod";
-import { DATA_DIR, decrypt, encrypt, writeDataFile } from "./secrets";
+import { decrypt, encrypt } from "./secrets";
+import { readDataFile, writeDataFile } from "./storage";
 import { loadSettings } from "./settings";
 import { frappeConfigured } from "./directory";
 import { getDoc, getList, insertDoc, updateDoc } from "./frappe";
@@ -73,8 +72,6 @@ export interface QuoteRecord {
   currency: string;
 }
 
-const QUOTES_FILE = path.join(DATA_DIR, "quotes.enc");
-
 /**
  * Serializes load-modify-save cycles on the local quote file so concurrent
  * requests can't drop each other's writes. In-process only — sufficient for
@@ -90,12 +87,11 @@ function withFileLock<T>(fn: () => T | Promise<T>): Promise<T> {
   return run;
 }
 
-function loadLocalQuotes(): QuoteRecord[] {
-  if (!fs.existsSync(QUOTES_FILE)) return [];
+async function loadLocalQuotes(): Promise<QuoteRecord[]> {
+  const raw = await readDataFile("quotes.enc");
+  if (raw === null) return [];
   try {
-    const records = JSON.parse(
-      decrypt(fs.readFileSync(QUOTES_FILE, "utf8"))
-    ) as QuoteRecord[];
+    const records = JSON.parse(decrypt(raw)) as QuoteRecord[];
     // Expiry applied at read time so displays are always correct even when
     // the write-back in applyExpiryLocal cannot persist.
     return records.map((q) => {
@@ -111,8 +107,8 @@ function loadLocalQuotes(): QuoteRecord[] {
   }
 }
 
-function saveLocalQuotes(quotes: QuoteRecord[]): void {
-  writeDataFile("quotes.enc", encrypt(JSON.stringify(quotes)));
+async function saveLocalQuotes(quotes: QuoteRecord[]): Promise<void> {
+  await writeDataFile("quotes.enc", encrypt(JSON.stringify(quotes)));
 }
 
 function nextLocalId(existing: QuoteRecord[]): string {
@@ -130,7 +126,7 @@ function nextLocalId(existing: QuoteRecord[]): string {
  * valid slider range.
  */
 export async function createQuote(draft: QuoteDraft): Promise<QuoteRecord> {
-  const settings = loadSettings();
+  const settings = await loadSettings();
   const inputs: QuoteInputs = {
     monthlyCost: draft.resource.monthlyCost,
     yearsExperience: draft.requirement.yearsExperience,
@@ -165,7 +161,7 @@ export async function createQuote(draft: QuoteDraft): Promise<QuoteRecord> {
     currency: settings.general.currency,
   };
 
-  if (frappeConfigured()) {
+  if (await frappeConfigured()) {
     try {
       const inserted = await insertDoc<{ name: string }>(
         "Consultant Quote",
@@ -176,11 +172,11 @@ export async function createQuote(draft: QuoteDraft): Promise<QuoteRecord> {
       // Frappe down or doctype missing — keep the quote locally (E5).
     }
   }
-  return withFileLock(() => {
-    const locals = loadLocalQuotes();
+  return withFileLock(async () => {
+    const locals = await loadLocalQuotes();
     const record: QuoteRecord = { ...base, id: nextLocalId(locals), storage: "local" };
     locals.unshift(record);
-    saveLocalQuotes(locals);
+    await saveLocalQuotes(locals);
     return record;
   });
 }
@@ -232,12 +228,12 @@ async function persistStatus(
   next: QuoteStatus
 ): Promise<QuoteRecord> {
   if (quote.storage === "local") {
-    return withFileLock(() => {
-      const locals = loadLocalQuotes();
+    return withFileLock(async () => {
+      const locals = await loadLocalQuotes();
       const idx = locals.findIndex((q) => q.id === quote.id);
       if (idx === -1) throw new QuoteNotFoundError(quote.id);
       locals[idx] = { ...locals[idx], status: next };
-      saveLocalQuotes(locals);
+      await saveLocalQuotes(locals);
       return locals[idx];
     });
   }
@@ -257,13 +253,13 @@ function isExpired(status: QuoteStatus, validUntil: string): boolean {
  * just not written back.
  */
 async function applyExpiryLocal(): Promise<void> {
-  await withFileLock(() => {
-    const locals = loadLocalQuotes();
+  await withFileLock(async () => {
+    const locals = await loadLocalQuotes();
     if (locals.some((q) => q.status === "Expired" && rawStatusWasOpen(q))) {
       try {
-        saveLocalQuotes(locals);
+        await saveLocalQuotes(locals);
       } catch {
-        /* read-only fs — display already correct */
+        /* storage unavailable — display already correct */
       }
     }
   });
@@ -293,10 +289,10 @@ export interface QuoteListItem {
 }
 
 export async function listQuotes(): Promise<{ items: QuoteListItem[]; degraded?: string }> {
-  const settings = loadSettings();
+  const settings = await loadSettings();
   await applyExpiryLocal();
-  const localItems = loadLocalQuotes().map(toListItem);
-  if (!frappeConfigured()) {
+  const localItems = (await loadLocalQuotes()).map(toListItem);
+  if (!(await frappeConfigured())) {
     return { items: localItems };
   }
   try {
@@ -346,12 +342,12 @@ export async function listQuotes(): Promise<{ items: QuoteListItem[]; degraded?:
 
 export async function getQuote(id: string): Promise<QuoteRecord | null> {
   await applyExpiryLocal();
-  const local = loadLocalQuotes().find((q) => q.id === id);
+  const local = (await loadLocalQuotes()).find((q) => q.id === id);
   if (local) return local;
-  if (!frappeConfigured()) return null;
+  if (!(await frappeConfigured())) return null;
   try {
     const doc = await getDoc<Record<string, unknown>>("Consultant Quote", id);
-    const record = fromFrappeDoc(doc);
+    const record = await fromFrappeDoc(doc);
     if (isExpired(record.status, record.validUntil)) {
       updateDoc("Consultant Quote", record.id, { status: "Expired" }).catch(() => {});
       return { ...record, status: "Expired" };
@@ -413,8 +409,8 @@ function toFrappeDoc(q: Omit<QuoteRecord, "id" | "storage">): Record<string, unk
   };
 }
 
-function fromFrappeDoc(doc: Record<string, unknown>): QuoteRecord {
-  const settings = loadSettings();
+async function fromFrappeDoc(doc: Record<string, unknown>): Promise<QuoteRecord> {
+  const settings = await loadSettings();
   let sheet: PriceSheet | null = null;
   try {
     const snap = JSON.parse(String(doc.pricing_config_snapshot ?? "{}")) as {

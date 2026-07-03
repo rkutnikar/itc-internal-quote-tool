@@ -38,9 +38,9 @@ export default function LoginPage() {
           // Read-only host (e.g. Vercel): setup can't persist a password.
           setMode("login");
           setError(
-            "This server cannot store a password (read-only filesystem). " +
-              "Set the APP_PASSWORD and SESSION_SECRET environment variables " +
-              "in your hosting dashboard, redeploy, then sign in here."
+            "This server has nowhere to save data (read-only filesystem, no Blob store). " +
+              "Either add a Vercel Blob store (Project → Storage → Create → Blob) and redeploy, " +
+              "or set the APP_PASSWORD and SESSION_SECRET environment variables."
           );
           return;
         }

@@ -17,24 +17,23 @@ No environment variables are required locally: settings (including Frappe creden
 
 ## Deploying to Vercel
 
-Vercel's serverless filesystem is ephemeral/read-only, so anything saved on the Settings screen does not survive there. Set env vars instead — they always override the settings file:
+Vercel's serverless filesystem is read-only, so the app needs **Vercel Blob** for storage (settings, shared password, quotes-before-Frappe). One-time setup:
 
-| Var | Required | Purpose |
-|---|---|---|
-| `SESSION_SECRET` | **yes** | 32+ random chars (`openssl rand -hex 32`); signs the login cookie, encrypts settings |
-| `APP_PASSWORD` | **yes** | Shared login password |
-| `FRAPPE_URL` | yes* | e.g. `https://yourco.frappe.cloud` |
-| `FRAPPE_API_KEY` / `FRAPPE_API_SECRET` | yes* | From the Frappe service user (see fixtures README) |
-| `DATA_DIR` | no | Override local data path (e.g. `/tmp/itc-data` for scratch persistence within a warm instance) |
-
-\* Without Frappe vars the app runs in sample-data mode and quotes can't persist on Vercel (read-only fs) — fine for a demo deploy, not for real use. **On Vercel, connect Frappe so quotes are stored there.**
-
-Deploy checklist:
 1. Push this repo to GitHub, import into Vercel (framework auto-detected: Next.js). No `vercel.json` needed.
-2. Add the env vars above (Production + Preview).
-3. Complete the Frappe setup in [frappe-fixtures/README.md](./frappe-fixtures/README.md) (service user, custom fields, doctype).
-4. Open the deployed app → log in with `APP_PASSWORD` → Settings → Run Connection Test → all green.
-5. Pricing Rules and Quote Document settings: on Vercel these currently reset per deploy unless set before build — tune them and keep Frappe as the source of quotes; a Frappe-side settings doc is the planned follow-up if this pinches.
+2. Vercel dashboard → your project → **Storage → Create Database → Blob** → create. This injects `BLOB_READ_WRITE_TOKEN` automatically — the app detects it and stores its two encrypted blobs there instead of on disk.
+3. Add env var `SESSION_SECRET` (32+ random chars, `openssl rand -hex 32`) — keeps logins valid across serverless instances.
+4. Redeploy. First visit now shows the set-password screen, and every Settings section saves and persists — same behavior as local.
+5. When connecting Frappe: complete [frappe-fixtures/README.md](./frappe-fixtures/README.md), then enter URL + keys in Settings → Run Connection Test.
+
+Optional env vars (each overrides the stored setting):
+
+| Var | Purpose |
+|---|---|
+| `APP_PASSWORD` | Shared login password (instead of the first-run screen) |
+| `FRAPPE_URL`, `FRAPPE_API_KEY`, `FRAPPE_API_SECRET` | Frappe connection (instead of the Settings screen) |
+| `DATA_DIR` | Override local data path (dev only) |
+
+Storage resolution: Blob store when `BLOB_READ_WRITE_TOKEN` exists, else local `data/` directory. Blob contents are AES-256-GCM encrypted with a key derived from `SESSION_SECRET` — changing that secret orphans previously saved data.
 
 ## First-run walkthrough (5 minutes)
 

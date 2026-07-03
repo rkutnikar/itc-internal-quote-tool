@@ -11,7 +11,7 @@ export async function POST() {
   if (!(await requireSession())) {
     return NextResponse.json({ error: "Not logged in." }, { status: 401 });
   }
-  const settings = loadSettings();
+  const settings = await loadSettings();
   if (!settings.frappe.url) {
     return NextResponse.json({
       results: [
@@ -25,6 +25,6 @@ export async function POST() {
       ],
     });
   }
-  const results = await runConnectionTest(getConnection(settings), settings);
+  const results = await runConnectionTest(await getConnection(settings), settings);
   return NextResponse.json({ results });
 }

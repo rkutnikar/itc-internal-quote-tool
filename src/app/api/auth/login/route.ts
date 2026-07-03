@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Password required." }, { status: 400 });
   }
   const { password, confirmPassword } = parsed.data;
-  const settings = loadSettings();
+  const settings = await loadSettings();
   const envPassword = process.env.APP_PASSWORD;
   const passwordSet = Boolean(envPassword) || settings.auth.passwordHash.length > 0;
 
@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
     }
     settings.auth.passwordHash = hashPassword(password);
     try {
-      saveSettings(settings);
+      await saveSettings(settings);
     } catch (err) {
       return NextResponse.json(
         { error: err instanceof Error ? err.message : "Could not save password." },

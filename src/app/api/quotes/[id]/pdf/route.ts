@@ -21,7 +21,7 @@ export async function GET(
     return NextResponse.json({ error: "Quote not found." }, { status: 404 });
   }
 
-  const settings = loadSettings();
+  const settings = await loadSettings();
   const pdf = await renderQuotePdf(quote, settings);
   const fileName = `${quote.id}.pdf`;
 

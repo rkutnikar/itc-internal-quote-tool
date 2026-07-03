@@ -12,7 +12,7 @@ export async function GET() {
   if (!(await requireSession())) {
     return NextResponse.json({ error: "Not logged in." }, { status: 401 });
   }
-  return NextResponse.json(publicSettings(loadSettings()));
+  return NextResponse.json(publicSettings(await loadSettings()));
 }
 
 const fieldnameSchema = z
@@ -70,7 +70,7 @@ export async function PUT(req: NextRequest) {
       { status: 400 }
     );
   }
-  const settings = loadSettings();
+  const settings = await loadSettings();
   const update = parsed.data;
 
   if (update.frappe) {
@@ -93,7 +93,7 @@ export async function PUT(req: NextRequest) {
   }
 
   try {
-    saveSettings(settings);
+    await saveSettings(settings);
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Could not save settings." },

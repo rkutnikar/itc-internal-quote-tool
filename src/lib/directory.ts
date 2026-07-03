@@ -48,8 +48,8 @@ interface CacheEntry {
 
 const cache = new Map<string, CacheEntry>();
 
-export function frappeConfigured(): boolean {
-  const s = loadSettings();
+export async function frappeConfigured(): Promise<boolean> {
+  const s = await loadSettings();
   return Boolean(s.frappe.url && s.frappe.apiKey && s.frappe.apiSecret);
 }
 
@@ -78,11 +78,11 @@ async function cached<T>(
 }
 
 export async function listEmployees(refresh = false): Promise<DirectoryResult<DirectoryEmployee>> {
-  if (!frappeConfigured()) {
+  if (!(await frappeConfigured())) {
     const { mockEmployees } = await import("./mock-data");
     return { source: "mock", fetchedAt: new Date().toISOString(), items: mockEmployees };
   }
-  const settings = loadSettings();
+  const settings = await loadSettings();
   const ctcField = settings.fields.employeeCtc;
   return cached("employees", refresh, async () => {
     const rows = await getList<Record<string, unknown>>("Employee", {
@@ -109,11 +109,11 @@ export async function listEmployees(refresh = false): Promise<DirectoryResult<Di
 }
 
 export async function listCustomers(refresh = false): Promise<DirectoryResult<DirectoryCustomer>> {
-  if (!frappeConfigured()) {
+  if (!(await frappeConfigured())) {
     const { mockCustomers } = await import("./mock-data");
     return { source: "mock", fetchedAt: new Date().toISOString(), items: mockCustomers };
   }
-  const settings = loadSettings();
+  const settings = await loadSettings();
   const prioField = settings.fields.customerPriority;
   return cached("customers", refresh, async () => {
     const rows = await getList<Record<string, unknown>>("Customer", {
@@ -139,11 +139,11 @@ export async function listCustomers(refresh = false): Promise<DirectoryResult<Di
 }
 
 export async function listSuppliers(refresh = false): Promise<DirectoryResult<DirectorySupplier>> {
-  if (!frappeConfigured()) {
+  if (!(await frappeConfigured())) {
     const { mockSuppliers } = await import("./mock-data");
     return { source: "mock", fetchedAt: new Date().toISOString(), items: mockSuppliers };
   }
-  const settings = loadSettings();
+  const settings = await loadSettings();
   const rateField = settings.fields.supplierRate;
   const flagField = settings.fields.supplierIsConsultant;
   return cached("suppliers", refresh, async () => {
